@@ -6,6 +6,7 @@ avoiding repeated actions, and deciding when enough information exists.
 from __future__ import annotations
 
 from typing import List, Optional, Tuple, Set
+from pathlib import Path
 from pydantic import BaseModel, Field
 
 from schemas import (

@@ -4,6 +4,7 @@ Provides a simplified interface to llm_gatewayV3 for structured LLM calls.
 """
 from __future__ import annotations
 
+import asyncio
 import os
 import json
 import httpx
@@ -51,15 +52,17 @@ class LLMGateway:
             Validated Pydantic model instance
         """
         # Normalize model: always use gemini-2.5-pro unless explicitly overridden
-        model_to_use = self.default_model
+        model_list = []
         if isinstance(model, list):
-            model_to_use = model[0] if model else self.default_model
+            model_list = model
         elif isinstance(model, str) and model and model.lower() not in ("auto", "perception", "decision", "gemini"):
-            # Use the exact model passed in
-            model_to_use = model
+            model_list = [model]
+        else:
+            model_list = [self.default_model, "gemini-3-flash", "gemini-2.5-flash"]
 
         last_exc: Optional[Exception] = None
-        for attempt, m in enumerate([model_to_use]):
+        cooldown_attempts = 0
+        for attempt, m in enumerate(model_list):
             # Prepare the request for llm_gatewayV3
             request_data = {
                 "messages": [
@@ -79,6 +82,15 @@ class LLMGateway:
 
             try:
                 response = await self.client.post(f"{self.gateway_url}/v1/chat", json=request_data)
+                if response.status_code == 503 and "cooldown" in response.text.lower():
+                    cooldown_attempts += 1
+                    if cooldown_attempts <= 4:
+                        await asyncio.sleep(5)
+                        last_exc = Exception(f"LLM gateway cooldown for model {m}: {response.status_code} - {response.text}")
+                        continue
+                    else:
+                        last_exc = Exception(f"LLM gateway cooldown expired for model {m}: {response.status_code} - {response.text}")
+                        continue
                 if response.status_code != 200:
                     last_exc = Exception(f"LLM gateway error for model {m}: {response.status_code} - {response.text}")
                     continue
@@ -104,7 +116,7 @@ class LLMGateway:
                 continue
 
         # If we get here, request failed
-        raise Exception(f"LLM gateway failed for model {model_to_use}. Last error: {last_exc}")
+        raise Exception(f"LLM gateway failed for models {model_list}. Last error: {last_exc}")
     
     async def close(self):
         """Close the HTTP client."""

@@ -5,6 +5,7 @@ Implements the cognitive architecture with perception, decision, action, and mem
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from typing import List, Optional
 from datetime import datetime
@@ -222,8 +223,8 @@ Please provide a final answer to the user's original question based on what you'
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_input}
                     ],
-                    "model": "final",  # Will be routed appropriately
-                    "temperature": 0.3,  # Slightly creative but still focused
+                    "model": self.llm_gateway.default_model,
+                    "temperature": 0.3,
                     "max_tokens": 1024
                 }
             )
